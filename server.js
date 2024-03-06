@@ -103,8 +103,11 @@ async function startServer() {
 
     if (mUrl) {
         try {
-            await axios.get('https://'+mUrl)
-        } catch (error) {}
+            let response = await axios.get('https://'+mUrl)
+            console.log(response.data)
+        } catch (error) {
+            console.log(mUrl)
+        }
     }
 }
 
