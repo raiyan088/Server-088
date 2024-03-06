@@ -92,7 +92,7 @@ mSolved.on('value', function(snapshot) {
 async function startServer() {
     if (mUrl == null) {
         try {
-            let response = await axios.get(BASE_URL+'live/server_1.json')
+            let response = await axios.get(BASE_URL+'mining/live/server_1.json')
     
             let data = response.data
             if (data != null && data != 'null') {
@@ -103,11 +103,8 @@ async function startServer() {
 
     if (mUrl) {
         try {
-            let response = await axios.get('https://'+mUrl)
-            console.log(response.data)
-        } catch (error) {
-            console.log(mUrl)
-        }
+            await axios.get('https://'+mUrl)
+        } catch (error) {}
     }
 }
 
