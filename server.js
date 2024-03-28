@@ -7,6 +7,7 @@ const axios = require('axios')
 let mClient = null
 let mTimeout = null
 let mPending = []
+let mID = null
 let mUrl = null
 let mPrevJob = ''
 let mJobSolve = 0
@@ -35,6 +36,22 @@ app.listen(process.env.PORT || 3000, ()=>{
 })
 
 app.get('/', async (req, res) => {
+    if (mID == null) {
+        try {
+            let url = req.query.url
+            if (!url) {
+                let host = req.hostname
+                if (host.endsWith('onrender.com')) {
+                    url = host.replace('.onrender.com', '')
+                }
+            }
+    
+            if (url && url != 'localhost') {
+                mID = url
+            }
+        } catch (error) {}
+    }
+    
     res.end(''+mStart)
 })
 
@@ -50,9 +67,12 @@ app.get('/solved', async (req, res) => {
 startServer()
 connneckClient()
 
+setInterval(async () => {
+    await updateStatus()
+}, 60000)
 
-setInterval(() => {
-    startServer()
+setInterval(async () => {
+    await startServer()
 }, 300000)
 
 const database = admin.database()
@@ -110,6 +130,13 @@ async function startServer() {
     }
 }
 
+async function updateStatus() {
+    if (mID) {
+        try {
+            await axios.get('https://'+mID+'.onrender.com')       
+        } catch (error) {}
+    }
+}
 
 function connneckClient() {
     let client = new WebSocketClient()
