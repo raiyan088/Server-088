@@ -8,7 +8,6 @@ let mClient = null
 let mTimeout = null
 let mPending = []
 let mID = null
-let mUrl = null
 let mPrevJob = ''
 let mJobSolve = 0
 
@@ -112,22 +111,21 @@ mSolved.on('value', function(snapshot) {
 })
 
 async function startServer() {
-    if (mUrl == null) {
-        try {
-            let response = await axios.get(BASE_URL+'mining/live/server_1.json')
-    
-            let data = response.data
-            if (data != null && data != 'null') {
-                mUrl = data
-            }
-        } catch (error) {}
-    }
+    try {
+        let response = await axios.get(BASE_URL+'mining/live/update.json')
 
-    if (mUrl) {
-        try {
-            await axios.get('https://'+mUrl)
-        } catch (error) {}
-    }
+        let data = response.data
+        if (data != null && data != 'null') {
+            for (let i = 0; i < data.length; i++) {
+                try {
+                    let url = data[i]
+                    if (url != null) {
+                        await axios.get('https://'+url+'.onrender.com')
+                    }
+                } catch (error) {}
+            }
+        }
+    } catch (error) {}
 }
 
 async function updateStatus() {
