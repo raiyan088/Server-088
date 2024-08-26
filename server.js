@@ -206,7 +206,7 @@ function connneckClient() {
         
         console.log('Re-Connect')
         connneckClient()
-    }, 900000)
+    }, 1800000)
 }
 
 
