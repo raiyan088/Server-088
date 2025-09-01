@@ -36,6 +36,10 @@ app.get('/', async (req, res) => {
     res.end(''+mStart)
 })
 
+app.get('/id', async (req, res) => {
+    res.end(''+mID)
+})
+
 setInterval(async () => {
     await updateMyStatus()
 }, 60000)
@@ -74,3 +78,4 @@ function delay(time) {
         setTimeout(resolve, time)
     })
 }
+
