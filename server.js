@@ -26,7 +26,6 @@ wss.on('connection', (ws) => {
         try {
             if (isBinary) {
                 let buffer = Buffer.from(msg)
-                console.log(buffer)
                 
                 let type = buffer.readUInt8(0)
                 let targetId = buffer.slice(1, 9).toString('hex')
@@ -61,8 +60,6 @@ wss.on('connection', (ws) => {
                 }
             } else {
                 let data = JSON.parse(msg)
-
-                console.log(data)
 
                 if (data.type === 'connect' && data.clientId) {
                     clientId = data.clientId
@@ -177,5 +174,6 @@ function delay(time) {
         setTimeout(resolve, time)
     })
 }
+
 
 
