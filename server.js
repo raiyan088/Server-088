@@ -26,12 +26,10 @@ wss.on('connection', (ws) => {
         try {
             if (isBinary) {
                 let buffer = Buffer.from(msg)
-                console.log(buffer)
-                
+
                 let type = buffer.readUInt8(0)
                 let targetId = buffer.slice(1, 9).toString('hex')
                 let payload = buffer.slice(9)
-
 
                 if (type == 1 && targetId) {
                     clientId = targetId
@@ -46,9 +44,10 @@ wss.on('connection', (ws) => {
                     let targetWs = clients.get(targetId)
 
                     if (targetWs && targetWs.readyState === WebSocket.OPEN) {
+                        let idBuffer = clientId ? Buffer.from(clientId, "hex") : Buffer.alloc(8)
                         let reply = Buffer.alloc(1 + 8 + payload.length)
                         reply.writeUInt8(type, 0)
-                        Buffer.from(clientId, "hex").copy(reply, 1)
+                        idBuffer.copy(reply, 1)
                         payload.copy(reply, 9)
                         targetWs.send(reply, { binary: true })
                     } else {
@@ -62,22 +61,18 @@ wss.on('connection', (ws) => {
             } else {
                 let data = JSON.parse(msg)
 
-                console.log(data)
-
-                if (data.type === 'connect' && data.textId) {
-                    clientId = data.textId
+                if (data.type === 'connect' && data.clientId) {
+                    clientId = data.clientId
                     clients.set(clientId, ws)
-                } else if (data.type === 'check' && data.textId) {
-                    let targetId = data.textId
-                    ws.send(JSON.stringify({ type: 'alive', clientId: targetId, alive: isClientAlive(targetId) }))
-                } else if ((data.type === 'message' || data.type === 'message_save') && data.toTextId && data.message) {
-                    let targetId = data.toTextId
-                    let targetWs = clients.get(targetId)
+                } else if (data.type === 'check' && data.targetId) {
+                    ws.send(JSON.stringify({ type: 'alive', id: data.targetId, alive: isClientAlive(data.targetId) }))
+                } else if ((data.type === 'message' || data.type === 'message_save') && data.targetId && data.message) {
+                    let targetWs = clients.get(data.targetId)
 
                     if (targetWs && targetWs.readyState === WebSocket.OPEN) {
-                        targetWs.send(JSON.stringify({ type: data.type, from: clientId, message: data.message }))
+                        targetWs.send(JSON.stringify({ type: data.type, id: clientId ? clientId : '', message: data.message }))
                     } else {
-                        ws.send(JSON.stringify({ type: 'alive', clientId: targetId, alive: false }))
+                        ws.send(JSON.stringify({ type: 'alive', id: data.targetId, alive: false }))
                     }
                 }
             }
