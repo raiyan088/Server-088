@@ -43,15 +43,13 @@ wss.on('connection', (ws) => {
                     reply.writeUInt8(isClientAlive(targetId) ? 1 : 0, 9)
                     ws.send(reply, { binary: true });
                 } else if ((type == 3 || type == 4) && targetId && payload) {
-                    let targetWs = clients.get(targetId)
-                    console.log(targetWs)
-
-                    if (targetWs && targetWs.readyState === WebSocket.OPEN) {
+                    if (isClientAlive(targetId)) {
                         let idBuffer = clientId ? Buffer.from(clientId, "hex") : Buffer.alloc(8)
                         let reply = Buffer.alloc(1 + 8 + payload.length)
                         reply.writeUInt8(type, 0)
                         idBuffer.copy(reply, 1)
                         payload.copy(reply, 9)
+                        let targetWs = clients.get(targetId)
                         targetWs.send(reply, { binary: true })
                     } else {
                         let reply = Buffer.alloc(1 + 8 + 1)
@@ -72,9 +70,8 @@ wss.on('connection', (ws) => {
                 } else if (data.type === 'check' && data.targetId) {
                     ws.send(JSON.stringify({ type: 'alive', id: data.targetId, alive: isClientAlive(data.targetId) }))
                 } else if ((data.type === 'message' || data.type === 'message_save') && data.targetId && data.message) {
-                    let targetWs = clients.get(data.targetId)
-                    console.log(targetWs)
-                    if (targetWs && targetWs.readyState === WebSocket.OPEN) {
+                    if (isClientAlive(data.targetId)) {
+                        let targetWs = clients.get(data.targetId)
                         targetWs.send(JSON.stringify({ type: data.type, id: clientId ? clientId : '', message: data.message }))
                     } else {
                         ws.send(JSON.stringify({ type: 'alive', id: data.targetId, alive: false }))
@@ -180,4 +177,5 @@ function delay(time) {
         setTimeout(resolve, time)
     })
 }
+
 
