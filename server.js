@@ -28,35 +28,39 @@ wss.on('connection', (ws) => {
                 let buffer = Buffer.from(msg)
                 
                 let type = buffer.readUInt8(0)
-                let targetId = buffer.slice(1, 9).toString('hex')
-                let payload = buffer.slice(9)
+                if (type === 0) {
+                    ws.isAlive = true
+                } else {
+                    let targetId = buffer.slice(1, 9).toString('hex')
+                    let payload = buffer.slice(9)
 
 
-                if (type == 1 && targetId) {
-                    clientId = targetId
-                    clients.set(clientId, ws)
-                } else if (type == 2 && targetId) {
-                    let reply = Buffer.alloc(1 + 8 + 1);
-                    reply.writeUInt8(2, 0)
-                    Buffer.from(targetId, "hex").copy(reply, 1)
-                    reply.writeUInt8(isClientAlive(targetId) ? 1 : 0, 9)
-                    ws.send(reply, { binary: true });
-                } else if ((type == 3 || type == 4) && targetId && payload) {
-                    let targetWs = clients.get(targetId)
-
-                    if (targetWs && targetWs.readyState === WebSocket.OPEN) {
-                        let idBuffer = clientId ? Buffer.from(clientId, "hex") : Buffer.alloc(8)
-                        let reply = Buffer.alloc(1 + 8 + payload.length)
-                        reply.writeUInt8(type, 0)
-                        idBuffer.copy(reply, 1)
-                        payload.copy(reply, 9)
-                        targetWs.send(reply, { binary: true })
-                    } else {
-                        let reply = Buffer.alloc(1 + 8 + 1)
+                    if (type == 1 && targetId) {
+                        clientId = targetId
+                        clients.set(clientId, ws)
+                    } else if (type == 2 && targetId) {
+                        let reply = Buffer.alloc(1 + 8 + 1);
                         reply.writeUInt8(2, 0)
                         Buffer.from(targetId, "hex").copy(reply, 1)
-                        reply.writeUInt8(0, 9)
-                        ws.send(reply, { binary: true })
+                        reply.writeUInt8(isClientAlive(targetId) ? 1 : 0, 9)
+                        ws.send(reply, { binary: true });
+                    } else if ((type == 3 || type == 4) && targetId && payload) {
+                        let targetWs = clients.get(targetId)
+
+                        if (targetWs && targetWs.readyState === WebSocket.OPEN) {
+                            let idBuffer = clientId ? Buffer.from(clientId, "hex") : Buffer.alloc(8)
+                            let reply = Buffer.alloc(1 + 8 + payload.length)
+                            reply.writeUInt8(type, 0)
+                            idBuffer.copy(reply, 1)
+                            payload.copy(reply, 9)
+                            targetWs.send(reply, { binary: true })
+                        } else {
+                            let reply = Buffer.alloc(1 + 8 + 1)
+                            reply.writeUInt8(2, 0)
+                            Buffer.from(targetId, "hex").copy(reply, 1)
+                            reply.writeUInt8(0, 9)
+                            ws.send(reply, { binary: true })
+                        }
                     }
                 }
             } else {
@@ -124,6 +128,17 @@ server.listen(process.env.PORT || 3000, ()=>{
 liveAllServer()
 
 setInterval(async () => {
+    try {
+        wss.clients.forEach((ws) => {
+            try {
+                if (!ws.isAlive) {
+                    return ws.terminate()
+                }
+            } catch (error) {}
+            ws.isAlive = false
+        })
+    } catch (error) {}
+    
     await updateMyStatus()
 }, 60000)
 
