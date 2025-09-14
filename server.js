@@ -44,6 +44,7 @@ wss.on('connection', (ws) => {
                     ws.send(reply, { binary: true });
                 } else if ((type == 3 || type == 4) && targetId && payload) {
                     let targetWs = clients.get(targetId)
+                    console.log(targetWs)
 
                     if (targetWs && targetWs.readyState === WebSocket.OPEN) {
                         let idBuffer = clientId ? Buffer.from(clientId, "hex") : Buffer.alloc(8)
@@ -72,7 +73,7 @@ wss.on('connection', (ws) => {
                     ws.send(JSON.stringify({ type: 'alive', id: data.targetId, alive: isClientAlive(data.targetId) }))
                 } else if ((data.type === 'message' || data.type === 'message_save') && data.targetId && data.message) {
                     let targetWs = clients.get(data.targetId)
-
+                    console.log(targetWs)
                     if (targetWs && targetWs.readyState === WebSocket.OPEN) {
                         targetWs.send(JSON.stringify({ type: data.type, id: clientId ? clientId : '', message: data.message }))
                     } else {
@@ -179,3 +180,4 @@ function delay(time) {
         setTimeout(resolve, time)
     })
 }
+
