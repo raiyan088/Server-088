@@ -20,17 +20,20 @@ let wss = new WebSocket.Server({ server })
 
 wss.on('connection', (ws) => {
     let clientId = null
+    ws.isAlive = true
+
+    ws.on('pong', () => {
+        ws.isAlive = true;
+    })
 
     ws.on('message', (msg, isBinary) => {
-
+        ws.isAlive = true
         try {
             if (isBinary) {
                 let buffer = Buffer.from(msg)
                 
                 let type = buffer.readUInt8(0)
-                if (type === 0) {
-                    ws.isAlive = true
-                } else {
+                if (type != 0) {
                     let targetId = buffer.slice(1, 9).toString('hex')
                     let payload = buffer.slice(9)
 
@@ -138,7 +141,7 @@ setInterval(async () => {
             ws.isAlive = false
         })
     } catch (error) {}
-    
+
     await updateMyStatus()
 }, 60000)
 
