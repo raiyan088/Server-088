@@ -22,6 +22,8 @@ wss.on('connection', (ws) => {
     let clientId = null
 
     ws.on('message', (msg, isBinary) => {
+        console.log(isBinary, msg)
+        
         try {
             if (isBinary) {
                 let buffer = Buffer.from(msg)
@@ -39,12 +41,12 @@ wss.on('connection', (ws) => {
                     Buffer.from(targetId, "hex").copy(reply, 1)
                     reply.writeUInt8(isClientAlive(targetId) ? 1 : 0, 9)
                     ws.send(reply, { binary: true });
-                } else if (type == 3 && targetId && payload) {
+                } else if ((type == 3 || type == 4) && targetId && payload) {
                     let targetWs = clients.get(targetId)
 
                     if (targetWs && targetWs.readyState === WebSocket.OPEN) {
                         let reply = Buffer.alloc(1 + 8 + payload.length)
-                        reply.writeUInt8(3, 0)
+                        reply.writeUInt8(type, 0)
                         Buffer.from(clientId, "hex").copy(reply, 1)
                         payload.copy(reply, 9)
                         targetWs.send(reply, { binary: true })
@@ -65,18 +67,21 @@ wss.on('connection', (ws) => {
                 } else if (data.type === 'check' && data.textId) {
                     let targetId = data.textId
                     ws.send(JSON.stringify({ type: 'alive', clientId: targetId, alive: isClientAlive(targetId) }))
-                } else if (data.type === 'message' && data.toTextId && data.message) {
+                } else if ((data.type === 'message' || data.type === 'message_save') && data.toTextId && data.message) {
                     let targetId = data.toTextId
                     let targetWs = clients.get(targetId)
 
                     if (targetWs && targetWs.readyState === WebSocket.OPEN) {
-                        targetWs.send(JSON.stringify({ type: 'message', from: clientId, message: data.message }))
+                        targetWs.send(JSON.stringify({ type: data.type, from: clientId, message: data.message }))
                     } else {
                         ws.send(JSON.stringify({ type: 'alive', clientId: targetId, alive: false }))
                     }
                 }
             }
-        } catch (e) {}
+        } catch (e) {
+            console.log(e);
+            
+        }
     })
 
     ws.on('close', () => {
