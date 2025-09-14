@@ -22,11 +22,12 @@ wss.on('connection', (ws) => {
     let clientId = null
 
     ws.on('message', (msg, isBinary) => {
-        console.log(isBinary, msg)
-        
+
         try {
             if (isBinary) {
                 let buffer = Buffer.from(msg)
+                console.log(buffer)
+                
                 let type = buffer.readUInt8(0)
                 let targetId = buffer.slice(1, 9).toString('hex')
                 let payload = buffer.slice(9)
@@ -60,6 +61,8 @@ wss.on('connection', (ws) => {
                 }
             } else {
                 let data = JSON.parse(msg)
+
+                console.log(data)
 
                 if (data.type === 'connect' && data.textId) {
                     clientId = data.textId
