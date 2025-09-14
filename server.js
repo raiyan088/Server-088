@@ -42,13 +42,14 @@ wss.on('connection', (ws) => {
                     reply.writeUInt8(isClientAlive(targetId) ? 1 : 0, 9)
                     ws.send(reply, { binary: true });
                 } else if ((type == 3 || type == 4) && targetId && payload) {
-                    if (isClientAlive(targetId)) {
+                    let targetWs = clients.get(targetId)
+
+                    if (targetWs && targetWs.readyState === WebSocket.OPEN) {
                         let idBuffer = clientId ? Buffer.from(clientId, "hex") : Buffer.alloc(8)
                         let reply = Buffer.alloc(1 + 8 + payload.length)
                         reply.writeUInt8(type, 0)
                         idBuffer.copy(reply, 1)
                         payload.copy(reply, 9)
-                        let targetWs = clients.get(targetId)
                         targetWs.send(reply, { binary: true })
                     } else {
                         let reply = Buffer.alloc(1 + 8 + 1)
@@ -67,26 +68,27 @@ wss.on('connection', (ws) => {
                 } else if (data.type === 'check' && data.targetId) {
                     ws.send(JSON.stringify({ type: 'alive', id: data.targetId, alive: isClientAlive(data.targetId) }))
                 } else if ((data.type === 'message' || data.type === 'message_save') && data.targetId && data.message) {
-                    if (isClientAlive(data.targetId)) {
-                        let targetWs = clients.get(data.targetId)
+                    let targetWs = clients.get(data.targetId)
+
+                    if (targetWs && targetWs.readyState === WebSocket.OPEN) {
                         targetWs.send(JSON.stringify({ type: data.type, id: clientId ? clientId : '', message: data.message }))
                     } else {
                         ws.send(JSON.stringify({ type: 'alive', id: data.targetId, alive: false }))
                     }
                 }
             }
-        } catch (e) {
-            console.log(e);
-            
-        }
+        } catch (e) {}
     })
 
     ws.on('close', () => {
         try {
-            if (clientId) {
-                clients.delete(clientId)
+            if (clientId && clients.has(clientId)) {
+                let currentWs = clients.get(clientId)
+                if (currentWs === ws) {
+                    clients.delete(clientId)
+                }
             }
-        } catch (error) {}
+        } catch (e) {}
     })
 })
 
@@ -144,9 +146,7 @@ async function liveAllServer() {
         }))
 
         results.forEach(r => console.log(`Url: ${r.url} -- Result: ${r.result}`))
-    } catch (error) {
-        console.log(error)
-    }
+    } catch (error) {}
 }
 
 async function updateMyStatus() {
@@ -174,6 +174,3 @@ function delay(time) {
         setTimeout(resolve, time)
     })
 }
-
-
-
