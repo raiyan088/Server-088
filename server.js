@@ -25,7 +25,7 @@ wss.on('connection', (ws) => {
     ws.isAlive = true
 
     ws.on('pong', () => {
-        ws.isAlive = true;
+        ws.isAlive = true
     })
 
     ws.on('message', (msg, isBinary) => {
@@ -42,6 +42,16 @@ wss.on('connection', (ws) => {
                     if (type == 1 && targetId) {
                         clientId = targetId
                         clients.set(clientId, ws)
+
+                        let targetClients = reverseMap.get(clientId)
+                        if (targetClients) {
+                            targetClients.forEach(cId => {
+                                let cWs = clients.get(cId)
+                                if (cWs && cWs.readyState === WebSocket.OPEN) {
+                                    cWs.send(JSON.stringify({ type: 'connect', id: clientId }))
+                                }
+                            })
+                        }
                     } else if (type == 2 && targetId) {
                         let reply = Buffer.alloc(1 + 8 + 1);
                         reply.writeUInt8(2, 0)
@@ -73,6 +83,16 @@ wss.on('connection', (ws) => {
                 if (data.type === 'connect' && data.clientId) {
                     clientId = data.clientId
                     clients.set(clientId, ws)
+
+                    let targetClients = reverseMap.get(clientId)
+                    if (targetClients) {
+                        targetClients.forEach(cId => {
+                            let cWs = clients.get(cId)
+                            if (cWs && cWs.readyState === WebSocket.OPEN) {
+                                cWs.send(JSON.stringify({ type: 'connect', id: clientId }))
+                            }
+                        })
+                    }
                 } else if (data.type === 'check' && data.targetId) {
                     ws.send(JSON.stringify({ type: 'alive', id: data.targetId, alive: isClientAlive(data.targetId) }))
                 } else if (data.type === 'callback' && data.targetId && clientId) {
