@@ -103,6 +103,11 @@ wss.on('connection', (ws) => {
                     let revSet = reverseMap.get(data.targetId) || new Set()
                     revSet.add(clientId)
                     reverseMap.set(data.targetId, revSet)
+                    let targetWs = clients.get(data.targetId)
+
+                    if (targetWs && targetWs.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ type: 'connect', id: data.targetId }))
+                    }
                 } else if ((data.type === 'message' || data.type === 'message_save') && data.targetId && data.message) {
                     let targetWs = clients.get(data.targetId)
 
@@ -231,4 +236,3 @@ function delay(time) {
         setTimeout(resolve, time)
     })
 }
-
