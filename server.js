@@ -10,6 +10,8 @@ let mStart = new Date().toString()
 let BASE_URL = decode('aHR0cHM6Ly9qb2Itc2VydmVyLTA4OC1kZWZhdWx0LXJ0ZGIuZmlyZWJhc2Vpby5jb20vJUMyJUEzdWNrJUUzJTgwJTg1eW91Lw==')
 
 let clients = new Map()
+let callbackMap = new Map()
+let reverseMap = new Map()
 let app = express()
 
 app.use(express.json())
@@ -36,7 +38,6 @@ wss.on('connection', (ws) => {
                 if (type != 0) {
                     let targetId = buffer.slice(1, 9).toString('hex')
                     let payload = buffer.slice(9)
-
 
                     if (type == 1 && targetId) {
                         clientId = targetId
@@ -74,6 +75,14 @@ wss.on('connection', (ws) => {
                     clients.set(clientId, ws)
                 } else if (data.type === 'check' && data.targetId) {
                     ws.send(JSON.stringify({ type: 'alive', id: data.targetId, alive: isClientAlive(data.targetId) }))
+                } else if (data.type === 'callback' && data.targetId && clientId) {
+                    let clientSet = callbackMap.get(clientId) || new Set()
+                    clientSet.add(data.targetId)
+                    callbackMap.set(clientId, clientSet)
+
+                    let revSet = reverseMap.get(data.targetId) || new Set()
+                    revSet.add(clientId)
+                    reverseMap.set(data.targetId, revSet)
                 } else if ((data.type === 'message' || data.type === 'message_save') && data.targetId && data.message) {
                     let targetWs = clients.get(data.targetId)
 
@@ -88,15 +97,25 @@ wss.on('connection', (ws) => {
     })
 
     ws.on('close', () => {
-        try {
-            if (clientId && clients.has(clientId)) {
-                let currentWs = clients.get(clientId)
-                if (currentWs === ws) {
-                    clients.delete(clientId)
+        if (!clientId) return
+
+        if (clients.get(clientId) === ws) clients.delete(clientId)
+
+        let targetClients = reverseMap.get(clientId)
+        if (targetClients) {
+            targetClients.forEach(cId => {
+                let cWs = clients.get(cId)
+                if (cWs && cWs.readyState === WebSocket.OPEN) {
+                    cWs.send(JSON.stringify({ type: 'disconnect', id: clientId }))
                 }
-            }
-        } catch (e) {}
+                
+                let set = callbackMap.get(cId)
+                if (set) set.delete(clientId)
+            })
+            reverseMap.delete(clientId)
+        }
     })
+
 })
 
 
@@ -192,3 +211,4 @@ function delay(time) {
         setTimeout(resolve, time)
     })
 }
+
