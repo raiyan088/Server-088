@@ -10,8 +10,7 @@ let mStart = new Date().toString()
 let BASE_URL = decode('aHR0cHM6Ly9qb2Itc2VydmVyLTA4OC1kZWZhdWx0LXJ0ZGIuZmlyZWJhc2Vpby5jb20vJUMyJUEzdWNrJUUzJTgwJTg1eW91Lw==')
 
 let clients = new Map()
-let callbackMap = new Map()
-let reverseMap = new Map()
+let peers = new Map()
 let app = express()
 
 app.use(express.json())
@@ -20,11 +19,33 @@ let server = http.createServer(app)
 
 let wss = new WebSocket.Server({ server })
 
-wss.on('connection', (ws) => {
-    let clientId = null
+wss.on('connection', (ws, request) => {
+    let clientId = request.headers['clientid']
+
+    if (!clientId || clientId.length !== 32) {
+        ws.close(1008, 'Invalid clientId')
+        return
+    }
+    
     ws.isAlive = true
 
+    clients.set(clientId, ws)
+
+    let peerClients = peers.get(clientId)
+    if (peerClients) {
+        peerClients.forEach(cId => {
+            let cWs = clients.get(cId)
+            if (cWs && cWs.readyState === WebSocket.OPEN) {
+                cWs.send(JSON.stringify({ type: 'connect', id: clientId }))
+            }
+        })
+    }
+
     ws.on('pong', () => {
+        ws.isAlive = true
+    })
+
+    ws.on('ping', () => {
         ws.isAlive = true
     })
 
@@ -36,43 +57,30 @@ wss.on('connection', (ws) => {
                 
                 let type = buffer.readUInt8(0)
                 if (type != 0) {
-                    let targetId = buffer.slice(1, 9).toString('hex')
-                    let payload = buffer.slice(9)
+                    let targetId = buffer.slice(1, 17).toString('hex')
+                    let payload = buffer.slice(17)
 
                     if (type == 1 && targetId) {
-                        clientId = targetId
-                        clients.set(clientId, ws)
-
-                        let targetClients = reverseMap.get(clientId)
-                        if (targetClients) {
-                            targetClients.forEach(cId => {
-                                let cWs = clients.get(cId)
-                                if (cWs && cWs.readyState === WebSocket.OPEN) {
-                                    cWs.send(JSON.stringify({ type: 'connect', id: clientId }))
-                                }
-                            })
-                        }
-                    } else if (type == 2 && targetId) {
-                        let reply = Buffer.alloc(1 + 8 + 1);
+                        let reply = Buffer.alloc(1 + 16 + 1)
                         reply.writeUInt8(2, 0)
                         Buffer.from(targetId, "hex").copy(reply, 1)
-                        reply.writeUInt8(isClientAlive(targetId) ? 1 : 0, 9)
-                        ws.send(reply, { binary: true });
-                    } else if ((type == 3 || type == 4) && targetId && payload) {
+                        reply.writeUInt8(isClientAlive(targetId) ? 1 : 0, 17)
+                        ws.send(reply, { binary: true })
+                    } else if ((type == 2 || type == 3) && targetId && payload) {
                         let targetWs = clients.get(targetId)
 
                         if (targetWs && targetWs.readyState === WebSocket.OPEN) {
-                            let idBuffer = clientId ? Buffer.from(clientId, "hex") : Buffer.alloc(8)
-                            let reply = Buffer.alloc(1 + 8 + payload.length)
+                            let idBuffer = clientId ? Buffer.from(clientId, "hex") : Buffer.alloc(16)
+                            let reply = Buffer.alloc(1 + 16 + payload.length)
                             reply.writeUInt8(type, 0)
                             idBuffer.copy(reply, 1)
-                            payload.copy(reply, 9)
+                            payload.copy(reply, 17)
                             targetWs.send(reply, { binary: true })
                         } else {
-                            let reply = Buffer.alloc(1 + 8 + 1)
+                            let reply = Buffer.alloc(1 + 16 + 1)
                             reply.writeUInt8(2, 0)
                             Buffer.from(targetId, "hex").copy(reply, 1)
-                            reply.writeUInt8(0, 9)
+                            reply.writeUInt8(0, 17)
                             ws.send(reply, { binary: true })
                         }
                     }
@@ -80,29 +88,12 @@ wss.on('connection', (ws) => {
             } else {
                 let data = JSON.parse(msg)
 
-                if (data.type === 'connect' && data.clientId) {
-                    clientId = data.clientId
-                    clients.set(clientId, ws)
-
-                    let targetClients = reverseMap.get(clientId)
-                    if (targetClients) {
-                        targetClients.forEach(cId => {
-                            let cWs = clients.get(cId)
-                            if (cWs && cWs.readyState === WebSocket.OPEN) {
-                                cWs.send(JSON.stringify({ type: 'connect', id: clientId }))
-                            }
-                        })
-                    }
-                } else if (data.type === 'check' && data.targetId) {
+                if (data.type === 'check' && data.targetId) {
                     ws.send(JSON.stringify({ type: 'alive', id: data.targetId, alive: isClientAlive(data.targetId) }))
-                } else if (data.type === 'callback' && data.targetId && clientId) {
-                    let clientSet = callbackMap.get(clientId) || new Set()
-                    clientSet.add(data.targetId)
-                    callbackMap.set(clientId, clientSet)
-
-                    let revSet = reverseMap.get(data.targetId) || new Set()
-                    revSet.add(clientId)
-                    reverseMap.set(data.targetId, revSet)
+                } else if (data.type === 'peer' && data.targetId && clientId) {
+                    let peerSet = peers.get(data.targetId) || new Set()
+                    peerSet.add(clientId)
+                    peers.set(data.targetId, peerSet)
                     let targetWs = clients.get(data.targetId)
 
                     if (targetWs && targetWs.readyState === WebSocket.OPEN) {
@@ -126,21 +117,17 @@ wss.on('connection', (ws) => {
 
         if (clients.get(clientId) === ws) clients.delete(clientId)
 
-        let targetClients = reverseMap.get(clientId)
-        if (targetClients) {
-            targetClients.forEach(cId => {
+        let peerClients = peers.get(clientId)
+        if (peerClients) {
+            peerClients.forEach(cId => {
                 let cWs = clients.get(cId)
                 if (cWs && cWs.readyState === WebSocket.OPEN) {
                     cWs.send(JSON.stringify({ type: 'disconnect', id: clientId }))
                 }
-                
-                let set = callbackMap.get(cId)
-                if (set) set.delete(clientId)
             })
-            reverseMap.delete(clientId)
+            peers.delete(clientId)
         }
     })
-
 })
 
 
