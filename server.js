@@ -50,6 +50,11 @@ wss.on('connection', (ws, request) => {
     })
 
     ws.on('message', (msg, isBinary) => {
+        if (!clientId || clientId.length !== 32) {
+            ws.close(1008, 'Invalid clientId')
+            return
+        }
+        
         ws.isAlive = true
         try {
             if (isBinary) {
@@ -115,17 +120,19 @@ wss.on('connection', (ws, request) => {
     ws.on('close', () => {
         if (!clientId) return
 
-        if (clients.get(clientId) === ws) clients.delete(clientId)
+        if (clients.get(clientId) === ws) {
+            clients.delete(clientId)
 
-        let peerClients = peers.get(clientId)
-        if (peerClients) {
-            peerClients.forEach(cId => {
-                let cWs = clients.get(cId)
-                if (cWs && cWs.readyState === WebSocket.OPEN) {
-                    cWs.send(JSON.stringify({ type: 'disconnect', id: clientId }))
-                }
-            })
-            peers.delete(clientId)
+            let peerClients = peers.get(clientId)
+            if (peerClients) {
+                peerClients.forEach(cId => {
+                    let cWs = clients.get(cId)
+                    if (cWs && cWs.readyState === WebSocket.OPEN) {
+                        cWs.send(JSON.stringify({ type: 'disconnect', id: clientId }))
+                    }
+                })
+                peers.delete(clientId)
+            }
         }
     })
 })
